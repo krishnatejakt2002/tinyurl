@@ -102,7 +102,7 @@ app.get('/healthz', async (req, res) => {
 // -------------------------
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'dashboard.html')));
 app.get('/dashboard', (req, res) => res.sendFile(path.join(__dirname, 'dashboard.html')));
-app.get('/code/:shortCode', (req, res) => res.sendFile(path.join(__dirname, 'stats.html')));
+app.get('/code/:code', (req, res) => res.sendFile(path.join(__dirname, 'stats.html')));
 app.get('/health', (req, res) => {
   res.sendFile(path.join(__dirname, 'health.html'));
 });
@@ -120,22 +120,22 @@ app.post('/api/links', async (req, res) => {
     return res.status(400).json({ error: 'Invalid URL' });
   }
 
-  let shortCode = customCode ? customCode.trim() : generateShortCode();
+  let code = customCode ? customCode.trim() : generateShortCode();
 
-  if (!isValidCode(shortCode)) {
+  if (!isValidCode(code)) {
     return res.status(400).json({ error: 'Code must be 6-8 alphanumeric characters' });
   }
 
   try {
-    const exists = await pool.query('SELECT * FROM urls WHERE short_code = $1', [shortCode]);
+    const exists = await pool.query('SELECT * FROM urls WHERE short_code = $1', [code]);
     if (exists.rows.length > 0) return res.status(409).json({ error: 'Short code already exists' });
 
     const result = await pool.query(
       'INSERT INTO urls (short_code, original_url) VALUES ($1, $2) RETURNING *',
-      [shortCode, originalUrl]
+      [code, originalUrl]
     );
 
-    res.status(201).json({ shortUrl: `${BASE_URL}/${shortCode}`, data: result.rows[0] });
+    res.status(201).json({ shortUrl: `${BASE_URL}/${code}`, data: result.rows[0] });
   } catch (err) {
     res.status(500).json({ error: 'Failed to create short URL' });
   }
@@ -167,12 +167,12 @@ app.get('/api/links', async (req, res) => {
 // API: Single link stats
 // GET /api/links/:code
 // -------------------------
-app.get('/api/links/:shortCode', async (req, res) => {
-  const { shortCode } = req.params;
+app.get('/api/links/:code', async (req, res) => {
+  const { code } = req.params;
   try {
     const urlRes = await pool.query(
       'SELECT id, short_code, original_url, click_count, last_clicked_at FROM urls WHERE short_code = $1',
-      [shortCode]
+      [code]
     );
     if (urlRes.rows.length === 0) return res.status(404).json({ error: 'Short code not found' });
 
@@ -190,14 +190,14 @@ app.get('/api/links/:shortCode', async (req, res) => {
 
 // -------------------------
 // API: Delete link
-// DELETE /api/links/:shortCode
+// DELETE /api/links/:code
 // -------------------------
-app.delete('/api/links/:shortCode', async (req, res) => {
-  const { shortCode } = req.params;
+app.delete('/api/links/:code', async (req, res) => {
+  const { code } = req.params;
   try {
-    const result = await pool.query('DELETE FROM urls WHERE short_code = $1 RETURNING *', [shortCode]);
+    const result = await pool.query('DELETE FROM urls WHERE short_code = $1 RETURNING *', [code]);
     if (result.rows.length === 0) return res.status(404).json({ error: 'Short code not found' });
-    res.json({ message: `Short code ${shortCode} deleted successfully` });
+    res.json({ message: `Short code ${code} deleted successfully` });
   } catch (err) {
     res.status(500).json({ error: 'Failed to delete link' });
   }
@@ -207,10 +207,10 @@ app.delete('/api/links/:shortCode', async (req, res) => {
 // Redirect
 // GET /:code
 // -------------------------
-app.get('/:shortCode', async (req, res) => {
-  const { shortCode } = req.params;
+app.get('/:code', async (req, res) => {
+  const { code } = req.params;
   try {
-    const result = await pool.query('SELECT * FROM urls WHERE short_code = $1', [shortCode]);
+    const result = await pool.query('SELECT * FROM urls WHERE short_code = $1', [code]);
     if (result.rows.length === 0) return res.redirect('/404');
 
     const urlData = result.rows[0];
