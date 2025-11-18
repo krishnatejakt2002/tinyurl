@@ -4,19 +4,23 @@
   <meta charset="UTF-8">
   <title>TinyLink Health Check</title>
   <style>
-    body {
+    body { 
       font-family: Arial, sans-serif;
       padding: 20px;
       background: #f0f2f5;
     }
     h1 { text-align: center; }
     table {
-      width: 50%;
+      width: 60%;
       margin: 20px auto;
       border-collapse: collapse;
+      background: #fff;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
     }
     table, th, td { border: 1px solid #ccc; }
     th, td { padding: 8px; text-align: left; }
+    th { background: #4f46e5; color: #fff; }
+    tr:nth-child(even) { background: #f9f9f9; }
   </style>
 </head>
 <body>
@@ -30,7 +34,7 @@
   <script>
     async function loadHealth() {
       try {
-        const res = await fetch('/health');
+        const res = await fetch('/healthz');
         if (!res.ok) throw new Error('Failed to fetch health info');
 
         const data = await res.json();
@@ -41,14 +45,16 @@
           if (typeof data[key] === 'object') {
             tbody.innerHTML += `<tr><th colspan="2">${key}</th></tr>`;
             for (const subKey in data[key]) {
-              tbody.innerHTML += `<tr><td>${subKey}</td><td>${data[key][subKey]}</td></tr>`;
+              let value = data[key][subKey];
+              if (typeof value === 'object') value = JSON.stringify(value);
+              tbody.innerHTML += `<tr><td>${subKey}</td><td>${value}</td></tr>`;
             }
           } else {
             tbody.innerHTML += `<tr><td>${key}</td><td>${data[key]}</td></tr>`;
           }
         }
       } catch (err) {
-        document.body.innerHTML = `<h2>Error: ${err.message}</h2>`;
+        document.body.innerHTML = `<h2 style="color:red;text-align:center;">Error: ${err.message}</h2>`;
       }
     }
 

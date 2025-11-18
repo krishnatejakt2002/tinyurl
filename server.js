@@ -68,25 +68,34 @@ const isValidCode = (code) => /^[A-Za-z0-9]{6,8}$/.test(code);
 // -------------------------
 // Healthcheck
 // -------------------------
+// Health JSON endpoint
 app.get('/healthz', async (req, res) => {
   try {
     const uptime = process.uptime();
-    await pool.query('SELECT 1');
+    await pool.query('SELECT 1'); // Test DB connection
     res.json({
       ok: true,
       version: '1.0',
-      db: 'connected',
       uptime_seconds: uptime,
+      db: 'connected',
       system: {
         platform: process.platform,
         node_version: process.version,
         memory_usage: process.memoryUsage(),
-      },
+      }
     });
   } catch (err) {
-    res.status(503).json({ ok: false, db: 'unreachable', error: err.message });
+    res.status(503).json({
+      ok: false,
+      version: '1.0',
+      db: 'unreachable',
+      error: err.message
+    });
   }
 });
+
+// Serve HTML page for human-friendly health view
+
 
 // -------------------------
 // Frontend pages
@@ -94,6 +103,10 @@ app.get('/healthz', async (req, res) => {
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'dashboard.html')));
 app.get('/dashboard', (req, res) => res.sendFile(path.join(__dirname, 'dashboard.html')));
 app.get('/code/:shortCode', (req, res) => res.sendFile(path.join(__dirname, 'stats.html')));
+app.get('/health', (req, res) => {
+  res.sendFile(path.join(__dirname, 'health.html'));
+});
+
 app.get('/404', (req, res) => res.sendFile(path.join(__dirname, '404.html')));
 
 // -------------------------
