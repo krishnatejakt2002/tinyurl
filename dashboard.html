@@ -6,92 +6,213 @@
   <style>
     body {
       font-family: Arial, sans-serif;
-      padding: 20px;
-      background: #f0f2f5;
+      margin: 0;
+      padding: 0;
+      background: #f9fafb;
+      color: #333;
     }
-    h1 { text-align: center; }
-    input, button {
+    header, footer {
+      background: #4f46e5;
+      color: white;
+      text-align: center;
+      padding: 15px 0;
+    }
+    main {
+      max-width: 1000px;
+      margin: 20px auto;
+      padding: 0 15px;
+    }
+    h1 {
+      margin-bottom: 20px;
+    }
+    .form-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+    .form-group input {
+      flex: 1;
       padding: 8px;
-      margin: 5px;
-      font-size: 14px;
+      min-width: 150px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
     }
+    .form-group button {
+      padding: 8px 15px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      background-color: #4f46e5;
+      color: white;
+      transition: background 0.2s;
+    }
+    .form-group button:disabled {
+      background-color: #a5b4fc;
+      cursor: not-allowed;
+    }
+    .message {
+      margin-bottom: 10px;
+      padding: 8px;
+      border-radius: 4px;
+      display: none;
+    }
+    .message.success { background-color: #d1fae5; color: #065f46; }
+    .message.error { background-color: #fee2e2; color: #991b1b; }
+
     table {
       width: 100%;
       border-collapse: collapse;
-      margin-top: 20px;
-    }
-    table, th, td {
-      border: 1px solid #ccc;
+      margin-top: 10px;
     }
     th, td {
-      padding: 8px;
+      padding: 10px;
+      border: 1px solid #ddd;
       text-align: left;
+      max-width: 200px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
-    button.delete-btn {
-      background: red;
+    th {
+      background: #f3f4f6;
+    }
+    td a {
+      color: #4f46e5;
+      text-decoration: none;
+    }
+    td button.copy-btn {
+      margin-left: 5px;
+      background: #fbbf24;
+      color: #000;
+      padding: 4px 6px;
+      font-size: 12px;
+    }
+    td button.delete-btn {
+      background: #ef4444;
       color: white;
-      border: none;
-      cursor: pointer;
+      padding: 5px 8px;
+    }
+    .loading {
+      text-align: center;
+      font-style: italic;
+      margin-top: 15px;
+    }
+
+    /* Responsive */
+    @media (max-width: 600px) {
+      .form-group {
+        flex-direction: column;
+      }
+      table, thead, tbody, th, td, tr {
+        display: block;
+      }
+      th, td {
+        max-width: 100%;
+        white-space: normal;
+      }
+      td {
+        margin-bottom: 10px;
+      }
     }
   </style>
 </head>
 <body>
-  <h1>TinyURL Dashboard</h1>
+  <header>
+    <h1>TinyURL Dashboard</h1>
+  </header>
 
-  <div>
-    <input type="text" id="originalUrl" placeholder="Enter long URL">
-    <input type="text" id="customCode" placeholder="Optional custom code">
-    <button onclick="addUrl()">Add URL</button>
-    <input type="text" id="search" placeholder="Search by code or URL">
-    <button onclick="loadDashboard()">Search</button>
-  </div>
+  <main>
+    <div class="message success" id="successMsg"></div>
+    <div class="message error" id="errorMsg"></div>
 
-  <table>
-    <thead>
-      <tr>
-        <th>Short Code</th>
-        <th>Target URL</th>
-        <th>Total Clicks</th>
-        <th>Last Clicked</th>
-        <th>Actions</th>
-      </tr>
-    </thead>
-    <tbody id="dashboardBody"></tbody>
-  </table>
+    <div class="form-group">
+      <input type="text" id="originalUrl" placeholder="Enter long URL">
+      <input type="text" id="customCode" placeholder="Optional custom code">
+      <button id="addBtn" onclick="addUrl()">Add URL</button>
+      <input type="text" id="search" placeholder="Search by code or URL">
+      <button onclick="loadDashboard()">Search</button>
+    </div>
+
+    <div id="loading" class="loading" style="display:none;">Loading...</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Short Code</th>
+          <th>Target URL</th>
+          <th>Total Clicks</th>
+          <th>Last Clicked</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="dashboardBody"></tbody>
+    </table>
+  </main>
+
+  <footer>
+    TinyLink © 2025
+  </footer>
 
   <script>
-    // Change this to match your server URL
     const BASE_URL = "http://localhost:5005";
-    console.log(BASE_URL);
+    const addBtn = document.getElementById('addBtn');
+    const successMsg = document.getElementById('successMsg');
+    const errorMsg = document.getElementById('errorMsg');
+    const loadingEl = document.getElementById('loading');
+
+    function showMessage(type, msg) {
+      if (type === 'success') {
+        successMsg.textContent = msg;
+        successMsg.style.display = 'block';
+        errorMsg.style.display = 'none';
+      } else {
+        errorMsg.textContent = msg;
+        errorMsg.style.display = 'block';
+        successMsg.style.display = 'none';
+      }
+      setTimeout(() => {
+        successMsg.style.display = 'none';
+        errorMsg.style.display = 'none';
+      }, 3000);
+    }
+
     async function loadDashboard() {
       const search = document.getElementById('search').value || '';
+      loadingEl.style.display = 'block';
       try {
         const response = await fetch(`${BASE_URL}/api/links?search=${encodeURIComponent(search)}`);
         const data = await response.json();
 
         const tbody = document.getElementById('dashboardBody');
         tbody.innerHTML = '';
-
-        data.forEach(row => {
-          const tr = document.createElement('tr');
-
-          tr.innerHTML = `
-            <td>
-            <a href="${BASE_URL}/${row.short_code}" target="_blank">
-                ${row.short_code}
-            </a>
-            </td>
-            <td><a href="${row.original_url}" target="_blank">${row.original_url}</a></td>
-            <td>${row.click_count}</td>
-            <td>${row.last_clicked_at ? new Date(row.last_clicked_at).toLocaleString() : '-'}</td>
-            <td><button class="delete-btn" onclick="deleteUrl('${row.short_code}')">Delete</button></td>
-          `;
-
-          tbody.appendChild(tr);
-        });
+        if (data.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;">No links found</td></tr>`;
+        } else {
+          data.forEach(row => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+              <td>
+                <a href="${BASE_URL}/${row.short_code}" target="_blank">${row.short_code}</a>
+                <button class="copy-btn" onclick="copyToClipboard('${BASE_URL}/${row.short_code}')">Copy</button>
+              </td>
+              <td>
+                <a href="${row.original_url}" target="_blank">${row.original_url}</a>
+                <button class="copy-btn" onclick="copyToClipboard('${row.original_url}')">Copy</button>
+              </td>
+              <td>${row.click_count}</td>
+              <td>${row.last_clicked_at ? new Date(row.last_clicked_at).toLocaleString() : '-'}</td>
+              <td>
+                <button class="delete-btn" onclick="deleteUrl('${row.short_code}')">Delete</button>
+              </td>
+            `;
+            tbody.appendChild(tr);
+          });
+        }
       } catch (err) {
-        console.error('Error loading dashboard:', err);
-        alert('Failed to load dashboard');
+        showMessage('error', 'Failed to load dashboard');
+        console.error(err);
+      } finally {
+        loadingEl.style.display = 'none';
       }
     }
 
@@ -99,8 +220,9 @@
       const originalUrl = document.getElementById('originalUrl').value.trim();
       const customCode = document.getElementById('customCode').value.trim();
 
-      if (!originalUrl) return alert('Please enter a URL');
+      if (!originalUrl) return showMessage('error', 'Please enter a valid URL');
 
+      addBtn.disabled = true;
       try {
         const response = await fetch(`${BASE_URL}/api/links`, {
           method: 'POST',
@@ -109,45 +231,42 @@
         });
 
         const data = await response.json();
-
-        if (!response.ok) {
-          alert(data.error || 'Failed to add URL');
-        } else {
-          alert(`Short URL created: ${data.shortUrl}`);
+        if (!response.ok) showMessage('error', data.error || 'Failed to add URL');
+        else {
+          showMessage('success', `Short URL created: ${data.shortUrl}`);
           document.getElementById('originalUrl').value = '';
           document.getElementById('customCode').value = '';
           loadDashboard();
         }
       } catch (err) {
-        console.error('Error adding URL:', err);
-        alert('Failed to add URL');
+        showMessage('error', 'Failed to add URL');
+        console.error(err);
+      } finally {
+        addBtn.disabled = false;
       }
     }
 
     async function deleteUrl(shortCode) {
       if (!confirm(`Delete short code: ${shortCode}?`)) return;
-
       try {
-        const response = await fetch(`${BASE_URL}/api/links/${shortCode}`, {
-      method: 'DELETE',
-    });
-
-
+        const response = await fetch(`${BASE_URL}/api/links/${shortCode}`, { method: 'DELETE' });
         const data = await response.json();
-
-        if (!response.ok) {
-          alert(data.error || 'Failed to delete URL');
-        } else {
-          alert(data.message);
+        if (!response.ok) showMessage('error', data.error || 'Failed to delete URL');
+        else {
+          showMessage('success', data.message);
           loadDashboard();
         }
       } catch (err) {
-        console.error('Error deleting URL:', err);
-        alert('Failed to delete URL');
+        showMessage('error', 'Failed to delete URL');
+        console.error(err);
       }
     }
 
-    // Load dashboard on page load
+    function copyToClipboard(text) {
+      navigator.clipboard.writeText(text).then(() => showMessage('success', 'Copied to clipboard'));
+    }
+
+    // Initial load
     loadDashboard();
   </script>
 </body>
