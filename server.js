@@ -10,9 +10,12 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const BASE_URL = process.env.BASE_URL || `http://localhost:${PORT}`;
 
+// -------------------------
+// Middleware
+// -------------------------
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public'))); // optional if you add CSS/JS files
+app.use(express.static(path.join(__dirname, 'public')));
 
 // -------------------------
 // Postgres setup
@@ -60,16 +63,18 @@ createTables();
 // Utilities
 // -------------------------
 const generateShortCode = () => crypto.randomBytes(3).toString('hex');
+const isValidCode = (code) => /^[A-Za-z0-9]{6,8}$/.test(code);
 
 // -------------------------
 // Healthcheck
 // -------------------------
-app.get('/health', async (req, res) => {
+app.get('/healthz', async (req, res) => {
   try {
     const uptime = process.uptime();
     await pool.query('SELECT 1');
     res.json({
-      status: 'ok',
+      ok: true,
+      version: '1.0',
       db: 'connected',
       uptime_seconds: uptime,
       system: {
@@ -79,37 +84,23 @@ app.get('/health', async (req, res) => {
       },
     });
   } catch (err) {
-    res.status(503).json({ status: 'error', db: 'unreachable', error: err.message });
+    res.status(503).json({ ok: false, db: 'unreachable', error: err.message });
   }
 });
 
 // -------------------------
-// Serve frontend
+// Frontend pages
 // -------------------------
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
-});
-
-app.get('/dashboard', (req, res) => {
-  res.sendFile(path.join(__dirname, 'dashboard.html'));
-});
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'dashboard.html')));
+app.get('/dashboard', (req, res) => res.sendFile(path.join(__dirname, 'dashboard.html')));
+app.get('/code/:shortCode', (req, res) => res.sendFile(path.join(__dirname, 'stats.html')));
+app.get('/404', (req, res) => res.sendFile(path.join(__dirname, '404.html')));
 
 // -------------------------
-// DB test
+// API: Create link
+// POST /api/links
 // -------------------------
-app.get('/dbtest', async (req, res) => {
-  try {
-    const { rows } = await pool.query('SELECT NOW() as now');
-    res.json({ success: true, now: rows[0].now });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// -------------------------
-// Shorten URL
-// -------------------------
-app.post('/shorten', async (req, res) => {
+app.post('/api/links', async (req, res) => {
   const { originalUrl, customCode } = req.body;
 
   if (!originalUrl || !validUrl.isWebUri(originalUrl)) {
@@ -118,82 +109,32 @@ app.post('/shorten', async (req, res) => {
 
   let shortCode = customCode ? customCode.trim() : generateShortCode();
 
+  if (!isValidCode(shortCode)) {
+    return res.status(400).json({ error: 'Code must be 6-8 alphanumeric characters' });
+  }
+
   try {
-    const existing = await pool.query('SELECT * FROM urls WHERE short_code = $1', [shortCode]);
-    if (existing.rows.length > 0) {
-      return res.status(400).json({ error: 'Short code already exists. Try another one.' });
-    }
+    const exists = await pool.query('SELECT * FROM urls WHERE short_code = $1', [shortCode]);
+    if (exists.rows.length > 0) return res.status(409).json({ error: 'Short code already exists' });
 
     const result = await pool.query(
       'INSERT INTO urls (short_code, original_url) VALUES ($1, $2) RETURNING *',
       [shortCode, originalUrl]
     );
 
-    res.json({
-      shortUrl: `${BASE_URL}/${shortCode}`,
-      data: result.rows[0],
-    });
+    res.status(201).json({ shortUrl: `${BASE_URL}/${shortCode}`, data: result.rows[0] });
   } catch (err) {
     res.status(500).json({ error: 'Failed to create short URL' });
   }
 });
 
 // -------------------------
-// Redirect
+// API: List all links
+// GET /api/links
+// Optional query param: search
 // -------------------------
-app.get('/:shortCode', async (req, res) => {
-  const { shortCode } = req.params;
-
-  try {
-    const result = await pool.query('SELECT * FROM urls WHERE short_code = $1', [shortCode]);
-    if (result.rows.length === 0) return res.status(404).send('Short URL not found');
-
-    const urlData = result.rows[0];
-
-    await pool.query(
-      'UPDATE urls SET click_count = click_count + 1, last_clicked_at = NOW() WHERE id = $1',
-      [urlData.id]
-    );
-
-    await pool.query(
-      'INSERT INTO click_logs (url_id, user_agent, ip_address) VALUES ($1, $2, $3)',
-      [urlData.id, req.headers['user-agent'], req.ip]
-    );
-
-    res.redirect(302, urlData.original_url);
-  } catch (err) {
-    res.status(500).send('Server error');
-  }
-});
-
-// -------------------------
-// Delete short URL
-// -------------------------
-app.delete('/delete/:shortCode', async (req, res) => {
-  const { shortCode } = req.params;
-
-  try {
-    const result = await pool.query(
-      'DELETE FROM urls WHERE short_code = $1 RETURNING *',
-      [shortCode]
-    );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Short code not found' });
-    }
-
-    res.json({ message: `Short code ${shortCode} deleted successfully` });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to delete short URL' });
-  }
-});
-
-// -------------------------
-// Dashboard API
-// -------------------------
-app.get('/api/dashboard', async (req, res) => {
+app.get('/api/links', async (req, res) => {
   const search = req.query.search || '';
-
   try {
     const query = `
       SELECT id, short_code, original_url, click_count, last_clicked_at
@@ -203,7 +144,6 @@ app.get('/api/dashboard', async (req, res) => {
     `;
     const values = [`%${search}%`];
     const result = await pool.query(query, values);
-
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch links' });
@@ -211,39 +151,74 @@ app.get('/api/dashboard', async (req, res) => {
 });
 
 // -------------------------
-// Single code stats
+// API: Single link stats
+// GET /api/links/:code
 // -------------------------
-app.get('/code/:shortCode', async (req, res) => {
+app.get('/api/links/:shortCode', async (req, res) => {
   const { shortCode } = req.params;
-
   try {
-    const urlResult = await pool.query(
+    const urlRes = await pool.query(
       'SELECT id, short_code, original_url, click_count, last_clicked_at FROM urls WHERE short_code = $1',
       [shortCode]
     );
+    if (urlRes.rows.length === 0) return res.status(404).json({ error: 'Short code not found' });
 
-    if (urlResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Short code not found' });
-    }
-
-    const urlData = urlResult.rows[0];
-
-    const clicksResult = await pool.query(
+    const urlData = urlRes.rows[0];
+    const clicksRes = await pool.query(
       'SELECT click_time, user_agent, ip_address FROM click_logs WHERE url_id = $1 ORDER BY click_time DESC',
       [urlData.id]
     );
 
-    res.json({ url: urlData, click_logs: clicksResult.rows });
+    res.json({ url: urlData, click_logs: clicksRes.rows });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch stats' });
   }
 });
 
+// -------------------------
+// API: Delete link
+// DELETE /api/links/:shortCode
+// -------------------------
+app.delete('/api/links/:shortCode', async (req, res) => {
+  const { shortCode } = req.params;
+  try {
+    const result = await pool.query('DELETE FROM urls WHERE short_code = $1 RETURNING *', [shortCode]);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Short code not found' });
+    res.json({ message: `Short code ${shortCode} deleted successfully` });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete link' });
+  }
+});
 
+// -------------------------
+// Redirect
+// GET /:code
+// -------------------------
+app.get('/:shortCode', async (req, res) => {
+  const { shortCode } = req.params;
+  try {
+    const result = await pool.query('SELECT * FROM urls WHERE short_code = $1', [shortCode]);
+    if (result.rows.length === 0) return res.redirect('/404');
+
+    const urlData = result.rows[0];
+
+    // Increment click count & log
+    await pool.query('UPDATE urls SET click_count = click_count + 1, last_clicked_at = NOW() WHERE id = $1', [urlData.id]);
+    await pool.query('INSERT INTO click_logs (url_id, user_agent, ip_address) VALUES ($1, $2, $3)', [
+      urlData.id,
+      req.headers['user-agent'],
+      req.ip,
+    ]);
+
+    res.redirect(302, urlData.original_url);
+  } catch (err) {
+    res.status(500).send('Server error');
+  }
+});
 
 // -------------------------
 // Start server
 // -------------------------
 app.listen(PORT, () => {
-  console.log(`Server listening on port ${PORT}`);
+  console.log(`Server running at ${BASE_URL}`);
 });

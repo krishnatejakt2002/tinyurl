@@ -2,77 +2,94 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Link Stats</title>
+  <title>TinyLink Stats</title>
   <style>
-    body { font-family: Arial, sans-serif; padding: 20px; background: #f0f2f5; }
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background: #f0f2f5;
+    }
     h1, h2 { text-align: center; }
-    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+    table, th, td {
+      border: 1px solid #ccc;
+    }
+    th, td {
+      padding: 8px;
+      text-align: left;
+    }
+    a { color: blue; text-decoration: none; }
   </style>
 </head>
 <body>
-  <h1>Link Stats</h1>
+  <h1>TinyLink Stats</h1>
   <div>
-    <label>Enter short code: </label>
-    <input type="text" id="shortCodeInput" placeholder="e.g., abc123">
-    <button onclick="loadStats()">View Stats</button>
+    <h2 id="shortCode">Loading...</h2>
+    <p><strong>Original URL:</strong> <a id="originalUrl" href="#" target="_blank"></a></p>
+    <p><strong>Total Clicks:</strong> <span id="clickCount">0</span></p>
+    <p><strong>Last Clicked:</strong> <span id="lastClicked">-</span></p>
   </div>
 
-  <div id="statsContainer" style="margin-top:20px;"></div>
+  <h2>Click Logs</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Time</th>
+        <th>User Agent</th>
+        <th>IP Address</th>
+      </tr>
+    </thead>
+    <tbody id="clickLogs">
+      <tr><td colspan="3">Loading...</td></tr>
+    </tbody>
+  </table>
 
   <script>
-    const BASE_URL = window.location.origin;
+    const shortCode = window.location.pathname.split('/').pop();
+    const API_URL = `/api/links/${shortCode}`;
 
     async function loadStats() {
-      const shortCode = document.getElementById('shortCodeInput').value.trim();
-      if (!shortCode) return alert('Enter a short code');
-
       try {
-        const response = await fetch(`${BASE_URL}/code/${shortCode}`);
-        if (response.status === 404) {
-          document.getElementById('statsContainer').innerHTML = '<p>Short code not found.</p>';
-          return;
-        }
+        const res = await fetch(API_URL);
+        if (!res.ok) throw new Error('Short code not found');
 
-        const data = await response.json();
+        const data = await res.json();
         const url = data.url;
-        const clicks = data.click_logs;
 
-        let html = `
-          <h2>Short Code: ${url.short_code}</h2>
-          <p>Original URL: <a href="${url.original_url}" target="_blank">${url.original_url}</a></p>
-          <p>Total Clicks: ${url.click_count}</p>
-          <p>Last Clicked: ${url.last_clicked_at ? new Date(url.last_clicked_at).toLocaleString() : '-'}</p>
-          <h3>Click Logs</h3>
-          <table>
-            <thead>
-              <tr>
-                <th>Time</th>
-                <th>IP Address</th>
-                <th>User Agent</th>
-              </tr>
-            </thead>
-            <tbody>
-        `;
+        document.getElementById('shortCode').textContent = `Stats for: ${url.short_code}`;
+        const orig = document.getElementById('originalUrl');
+        orig.href = url.original_url;
+        orig.textContent = url.original_url;
+        document.getElementById('clickCount').textContent = url.click_count;
+        document.getElementById('lastClicked').textContent = url.last_clicked_at 
+          ? new Date(url.last_clicked_at).toLocaleString() : '-';
 
-        clicks.forEach(c => {
-          html += `
-            <tr>
-              <td>${new Date(c.click_time).toLocaleString()}</td>
-              <td>${c.ip_address || '-'}</td>
-              <td>${c.user_agent || '-'}</td>
-            </tr>
-          `;
-        });
+        const tbody = document.getElementById('clickLogs');
+        tbody.innerHTML = '';
 
-        html += `</tbody></table>`;
-        document.getElementById('statsContainer').innerHTML = html;
-
+        if (data.click_logs.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="3">No clicks yet</td></tr>';
+        } else {
+          data.click_logs.forEach(log => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+              <td>${new Date(log.click_time).toLocaleString()}</td>
+              <td>${log.user_agent || '-'}</td>
+              <td>${log.ip_address || '-'}</td>
+            `;
+            tbody.appendChild(tr);
+          });
+        }
       } catch (err) {
-        console.error(err);
-        alert('Failed to load stats');
+        document.body.innerHTML = `<h2>Error: ${err.message}</h2>`;
       }
     }
+
+    loadStats();
   </script>
 </body>
 </html>

@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>TinyLink Health Check</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background: #f0f2f5;
+    }
+    h1 { text-align: center; }
+    table {
+      width: 50%;
+      margin: 20px auto;
+      border-collapse: collapse;
+    }
+    table, th, td { border: 1px solid #ccc; }
+    th, td { padding: 8px; text-align: left; }
+  </style>
+</head>
+<body>
+  <h1>System Health</h1>
+  <table>
+    <tbody id="healthBody">
+      <tr><td colspan="2">Loading...</td></tr>
+    </tbody>
+  </table>
+
+  <script>
+    async function loadHealth() {
+      try {
+        const res = await fetch('/health');
+        if (!res.ok) throw new Error('Failed to fetch health info');
+
+        const data = await res.json();
+        const tbody = document.getElementById('healthBody');
+        tbody.innerHTML = '';
+
+        for (const key in data) {
+          if (typeof data[key] === 'object') {
+            tbody.innerHTML += `<tr><th colspan="2">${key}</th></tr>`;
+            for (const subKey in data[key]) {
+              tbody.innerHTML += `<tr><td>${subKey}</td><td>${data[key][subKey]}</td></tr>`;
+            }
+          } else {
+            tbody.innerHTML += `<tr><td>${key}</td><td>${data[key]}</td></tr>`;
+          }
+        }
+      } catch (err) {
+        document.body.innerHTML = `<h2>Error: ${err.message}</h2>`;
+      }
+    }
+
+    loadHealth();
+  </script>
+</body>
+</html>

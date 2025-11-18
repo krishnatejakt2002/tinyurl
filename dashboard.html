@@ -66,7 +66,7 @@
     async function loadDashboard() {
       const search = document.getElementById('search').value || '';
       try {
-        const response = await fetch(`${BASE_URL}/api/dashboard?search=${encodeURIComponent(search)}`);
+        const response = await fetch(`${BASE_URL}/api/links?search=${encodeURIComponent(search)}`);
         const data = await response.json();
 
         const tbody = document.getElementById('dashboardBody');
