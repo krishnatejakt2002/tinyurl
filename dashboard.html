@@ -61,8 +61,8 @@
 
   <script>
     // Change this to match your server URL
-    const BASE_URL = window.location.origin;
-
+    const BASE_URL = "http://localhost:5005";
+    console.log(BASE_URL);
     async function loadDashboard() {
       const search = document.getElementById('search').value || '';
       try {
@@ -76,7 +76,11 @@
           const tr = document.createElement('tr');
 
           tr.innerHTML = `
-            <td>${row.short_code}</td>
+            <td>
+            <a href="${BASE_URL}/${row.short_code}" target="_blank">
+                ${row.short_code}
+            </a>
+            </td>
             <td><a href="${row.original_url}" target="_blank">${row.original_url}</a></td>
             <td>${row.click_count}</td>
             <td>${row.last_clicked_at ? new Date(row.last_clicked_at).toLocaleString() : '-'}</td>
@@ -98,7 +102,7 @@
       if (!originalUrl) return alert('Please enter a URL');
 
       try {
-        const response = await fetch(`${BASE_URL}/shorten`, {
+        const response = await fetch(`${BASE_URL}/api/links`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ originalUrl, customCode })
@@ -124,9 +128,10 @@
       if (!confirm(`Delete short code: ${shortCode}?`)) return;
 
       try {
-        const response = await fetch(`${BASE_URL}/delete/${shortCode}`, {
-          method: 'DELETE'
-        });
+        const response = await fetch(`${BASE_URL}/api/links/${shortCode}`, {
+      method: 'DELETE',
+    });
+
 
         const data = await response.json();
 
