@@ -2,93 +2,199 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>TinyLink Stats</title>
+  <title>TinyURL Stats</title>
   <style>
     body {
       font-family: Arial, sans-serif;
-      padding: 20px;
-      background: #f0f2f5;
+      background: #f9fafb;
+      color: #333;
+      margin: 0;
+      padding: 0;
     }
-    h1, h2 { text-align: center; }
+    header, footer {
+      background: #4f46e5;
+      color: white;
+      text-align: center;
+      padding: 15px 0;
+    }
+    main {
+      max-width: 900px;
+      margin: 20px auto;
+      padding: 0 15px;
+    }
+    h1 {
+      margin-bottom: 20px;
+    }
+    .info, .message {
+      margin-bottom: 15px;
+      padding: 10px;
+      border-radius: 5px;
+    }
+    .info {
+      background: #eef2ff;
+      color: #1e3a8a;
+    }
+    .message.success { background: #d1fae5; color: #065f46; display: none; }
+    .message.error { background: #fee2e2; color: #991b1b; display: none; }
+
     table {
       width: 100%;
       border-collapse: collapse;
-      margin-top: 20px;
-    }
-    table, th, td {
-      border: 1px solid #ccc;
+      margin-top: 15px;
     }
     th, td {
+      border: 1px solid #ddd;
       padding: 8px;
-      text-align: left;
+      max-width: 200px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
-    a { color: blue; text-decoration: none; }
+    th {
+      background: #f3f4f6;
+    }
+    td a {
+      color: #4f46e5;
+      text-decoration: none;
+    }
+    button.copy-btn {
+      margin-left: 5px;
+      background: #fbbf24;
+      color: #000;
+      padding: 3px 6px;
+      font-size: 12px;
+      border: none;
+      cursor: pointer;
+    }
+    .loading {
+      text-align: center;
+      font-style: italic;
+      margin-top: 10px;
+    }
+
+    /* Responsive */
+    @media (max-width: 600px) {
+      table, thead, tbody, th, td, tr {
+        display: block;
+      }
+      th, td {
+        white-space: normal;
+      }
+      td {
+        margin-bottom: 10px;
+      }
+    }
   </style>
 </head>
 <body>
-  <h1>TinyLink Stats</h1>
-  <div>
-    <h2 id="shortCode">Loading...</h2>
-    <p><strong>Original URL:</strong> <a id="originalUrl" href="#" target="_blank"></a></p>
-    <p><strong>Total Clicks:</strong> <span id="clickCount">0</span></p>
-    <p><strong>Last Clicked:</strong> <span id="lastClicked">-</span></p>
-  </div>
+  <header>
+    <h1>TinyURL Stats</h1>
+  </header>
 
-  <h2>Click Logs</h2>
-  <table>
-    <thead>
-      <tr>
-        <th>Time</th>
-        <th>User Agent</th>
-        <th>IP Address</th>
-      </tr>
-    </thead>
-    <tbody id="clickLogs">
-      <tr><td colspan="3">Loading...</td></tr>
-    </tbody>
-  </table>
+  <main>
+    <div class="message success" id="successMsg"></div>
+    <div class="message error" id="errorMsg"></div>
+    <div id="loading" class="loading">Loading stats...</div>
+
+    <div id="urlInfo" class="info" style="display:none;"></div>
+
+    <h2>Click Logs</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>User Agent</th>
+          <th>IP Address</th>
+        </tr>
+      </thead>
+      <tbody id="clickLogsBody"></tbody>
+    </table>
+  </main>
+
+  <footer>
+    TinyLink © 2025
+  </footer>
 
   <script>
-    const shortCode = window.location.pathname.split('/').pop();
-    const API_URL = `/api/links/${shortCode}`;
+    const BASE_URL = "http://localhost:5005";
+    const successMsg = document.getElementById('successMsg');
+    const errorMsg = document.getElementById('errorMsg');
+    const loadingEl = document.getElementById('loading');
+    const urlInfoEl = document.getElementById('urlInfo');
+    const clickLogsBody = document.getElementById('clickLogsBody');
+
+    function showMessage(type, msg) {
+      if (type === 'success') {
+        successMsg.textContent = msg;
+        successMsg.style.display = 'block';
+        errorMsg.style.display = 'none';
+      } else {
+        errorMsg.textContent = msg;
+        errorMsg.style.display = 'block';
+        successMsg.style.display = 'none';
+      }
+      setTimeout(() => {
+        successMsg.style.display = 'none';
+        errorMsg.style.display = 'none';
+      }, 3000);
+    }
+
+    function copyToClipboard(text) {
+      navigator.clipboard.writeText(text).then(() => showMessage('success', 'Copied to clipboard'));
+    }
 
     async function loadStats() {
+      const path = window.location.pathname;
+      const shortCode = path.split('/').pop();
       try {
-        const res = await fetch(API_URL);
-        if (!res.ok) throw new Error('Short code not found');
+        const response = await fetch(`${BASE_URL}/api/links/${shortCode}`);
+        const data = await response.json();
+        loadingEl.style.display = 'none';
 
-        const data = await res.json();
+        if (!response.ok) {
+          showMessage('error', data.error || 'Failed to load stats');
+          return;
+        }
+
         const url = data.url;
 
-        document.getElementById('shortCode').textContent = `Stats for: ${url.short_code}`;
-        const orig = document.getElementById('originalUrl');
-        orig.href = url.original_url;
-        orig.textContent = url.original_url;
-        document.getElementById('clickCount').textContent = url.click_count;
-        document.getElementById('lastClicked').textContent = url.last_clicked_at 
-          ? new Date(url.last_clicked_at).toLocaleString() : '-';
+        urlInfoEl.style.display = 'block';
+        urlInfoEl.innerHTML = `
+          <strong>Short Code:</strong> 
+          <a href="${BASE_URL}/${url.short_code}" target="_blank">${url.short_code}</a>
+          <button class="copy-btn" onclick="copyToClipboard('${BASE_URL}/${url.short_code}')">Copy</button>
+          <br>
+          <strong>Original URL:</strong> 
+          <a href="${url.original_url}" target="_blank">${url.original_url}</a>
+          <button class="copy-btn" onclick="copyToClipboard('${url.original_url}')">Copy</button>
+          <br>
+          <strong>Total Clicks:</strong> ${url.click_count} <br>
+          <strong>Last Clicked:</strong> ${url.last_clicked_at ? new Date(url.last_clicked_at).toLocaleString() : '-'}
+        `;
 
-        const tbody = document.getElementById('clickLogs');
-        tbody.innerHTML = '';
-
+        clickLogsBody.innerHTML = '';
         if (data.click_logs.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="3">No clicks yet</td></tr>';
+          clickLogsBody.innerHTML = `<tr><td colspan="3" style="text-align:center;">No clicks yet</td></tr>`;
         } else {
           data.click_logs.forEach(log => {
             const tr = document.createElement('tr');
             tr.innerHTML = `
               <td>${new Date(log.click_time).toLocaleString()}</td>
-              <td>${log.user_agent || '-'}</td>
-              <td>${log.ip_address || '-'}</td>
+              <td>${log.user_agent}</td>
+              <td>${log.ip_address}</td>
             `;
-            tbody.appendChild(tr);
+            clickLogsBody.appendChild(tr);
           });
         }
+
       } catch (err) {
-        document.body.innerHTML = `<h2>Error: ${err.message}</h2>`;
+        loadingEl.style.display = 'none';
+        showMessage('error', 'Failed to load stats');
+        console.error(err);
       }
     }
 
+    // Load stats on page load
     loadStats();
   </script>
 </body>
