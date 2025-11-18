@@ -15,6 +15,7 @@
         "morgan": "^1.10.0",
         "nanoid": "^4.0.0",
         "pg": "^8.10.0",
-        "ua-parser-js": "^1.0.2"
+        "ua-parser-js": "^1.0.2",
+        "valid-url": "^1.0.9"
     }
 }

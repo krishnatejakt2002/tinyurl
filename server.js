@@ -4,6 +4,7 @@ const { Pool } = require('pg');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const path = require('path');
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -72,8 +73,12 @@ app.get('/dbtest', async (req, res) => {
   }
 });
 
-app.get('/', (req, res) => res.send('TinyURL server - DB connection ready'));
 
+
+
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
 // Start
 app.listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);
